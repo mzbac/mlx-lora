@@ -32,7 +32,7 @@ python lora.py --model mlx-community/deepseek-coder-6.7b-instruct-hf-4bit-mlx --
 
 ## Preparing Your Data
 
-The dataset for fine-tuning is located in the `data`` folder. The file is named `data.jsonl``. The data format should be as follows:
+The dataset for fine-tuning is located in the `data` folder. The file is named `data.jsonl``. The data format should be as follows:
 
 ```
 {"text": "This is an example for the model."}

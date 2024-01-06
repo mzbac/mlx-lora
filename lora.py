@@ -5,16 +5,14 @@ import json
 import math
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 import numpy as np
-from mlx.utils import tree_flatten, tree_map, tree_unflatten
+from mlx.utils import tree_flatten
 import models
-from models import LoRALinear
-from sentencepiece import SentencePieceProcessor
+from utils import apply_lora_to_all_layers
 
 
 def build_parser():
@@ -59,6 +57,11 @@ def build_parser():
         type=int,
         default=16,
         help="Number of layers to fine-tune",
+    )
+    parser.add_argument(
+        "--all-layers",
+        action="store_true",
+        help="apply lora to all linear layers",
     )
     parser.add_argument("--batch-size", type=int, default=4, help="Minibatch size.")
     parser.add_argument(
@@ -318,9 +321,12 @@ if __name__ == "__main__":
     model, tokenizer = models.load(args.model)
     # Freeze all layers other than LORA linears
     model.freeze()
-    for l in model.model.layers[-args.lora_layers :]:
-        l.self_attn.q_proj = LoRALinear.from_linear(l.self_attn.q_proj)
-        l.self_attn.v_proj = LoRALinear.from_linear(l.self_attn.v_proj)
+    if args.all_layers:
+        apply_lora_to_all_layers(model)
+    else:
+        for l in model.model.layers[-args.lora_layers :]:
+            l.self_attn.q_proj = models.LoRALinear.from_linear(l.self_attn.q_proj)
+            l.self_attn.v_proj = models.LoRALinear.from_linear(l.self_attn.v_proj)
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")
