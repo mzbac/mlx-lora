@@ -51,6 +51,7 @@ class ModelArgs:
             }
         )
 
+
 class LoRALinear(nn.Module):
     @staticmethod
     def from_linear(linear: nn.Linear, rank: int = 8):
@@ -87,6 +88,24 @@ class LoRALinear(nn.Module):
         y = self.linear(x.astype(dtype))
         z = (x @ self.lora_a) @ self.lora_b
         return y + 2.0 * z
+
+    def merge(self):
+        """
+        Merge the base linear layer with lora weights from LoRA layers.
+
+        Returns:
+            nn.Linear: A new linear layer with modified weights.
+        """
+        if isinstance(self.linear, nn.QuantizedLinear):
+            self.linear.weight = mx.dequantize(
+                self.linear.weight, self.linear.group_size, self.linear.bits
+            )
+        output_dims, input_dims = self.linear.weight.shape
+        self.linear.weight += (self.lora_a @ self.lora_b).T * 2.0
+        new_linear = nn.Linear(input_dims, output_dims, bias=False)
+        new_linear.weight = self.linear.weight
+        return new_linear
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dims: int, eps: float = 1e-5):

@@ -38,3 +38,22 @@ The dataset for fine-tuning is located in the `data` folder. The file is named `
 {"text": "This is an example for the model."}
 ```
 Please note that you need to prepare your own Q&A dataset. The dataset should be a single text sentence without any beginning of sentence (bos) or end of sentence (eos) characters.
+
+
+## Merge lora back to original model
+
+Merge the lora model back to the original model. It uses the `lora.py` script with the following command-line arguments:
+## Merge lora back to original model
+
+```
+python lora.py --model ./models/mistralai/Mistral-7B-v0.1 --adapter-file adapters.npz --merge-lora  
+```
+
+To run inference only, use the following command:
+
+```
+python inference.py --model merged_model --prompt "table: 1-10015132-16
+columns: Player, No., Nationality, Position, Years in Toronto, School/Club Team
+Q: What is terrence ross' nationality
+A: "
+```

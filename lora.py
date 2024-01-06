@@ -12,7 +12,12 @@ import mlx.optimizers as optim
 import numpy as np
 from mlx.utils import tree_flatten
 import models
-from utils import apply_lora_to_all_layers
+from utils import (
+    apply_lora_to_all_layers,
+    make_shards,
+    merge_lora,
+    prepare_model_for_export,
+)
 
 
 def build_parser():
@@ -111,13 +116,26 @@ def build_parser():
         default=500,
         help="Number of test set batches, -1 uses the entire test set.",
     )
+    parser.add_argument(
+        "--merge-lora",
+        action="store_true",
+        help="merge lora adapters into linear layers and export the model",
+    )
+    parser.add_argument(
+        "--export-path",
+        type=str,
+        default="merged_model",
+        help="Save path merged and exported model.",
+    )
     parser.add_argument("--seed", type=int, default=0, help="The PRNG seed")
     return parser
+
 
 class Dataset:
     """
     Light-weight wrapper to hold lines from a jsonl file
     """
+
     def __init__(self, data, key: str = "text"):
         self._data = data
         self._key = key
@@ -127,6 +145,7 @@ class Dataset:
 
     def __len__(self):
         return len(self._data)
+
 
 def split_dataset(data, train_ratio, valid_ratio, test_ratio):
     total = len(data)
@@ -139,6 +158,7 @@ def split_dataset(data, train_ratio, valid_ratio, test_ratio):
 
     return train_data, valid_data, test_data
 
+
 def load(args, train_ratio=0.7, valid_ratio=0.2, test_ratio=0.1):
     path = Path(args.data)
     if not path.exists():
@@ -148,10 +168,13 @@ def load(args, train_ratio=0.7, valid_ratio=0.2, test_ratio=0.1):
         data = [json.loads(line) for line in fid]
 
     import random
+
     random.shuffle(data)
 
-    train_data, valid_data, test_data = split_dataset(data, train_ratio, valid_ratio, test_ratio)
-    
+    train_data, valid_data, test_data = split_dataset(
+        data, train_ratio, valid_ratio, test_ratio
+    )
+
     train = Dataset(train_data)
     valid = Dataset(valid_data)
     test = Dataset(test_data)
@@ -184,10 +207,7 @@ def iterate_batches(dset, tokenizer, batch_size, train=False):
         # Collect batches from dataset
         for i in range(0, len(indices) - batch_size + 1, batch_size):
             # Encode batch
-            batch = [
-                tokenizer.encode(dset[indices[i + j]])
-                for j in range(batch_size)
-            ]
+            batch = [tokenizer.encode(dset[indices[i + j]]) for j in range(batch_size)]
             lengths = [len(x) for x in batch]
 
             # Check if any sequence is longer than 2048 tokens
@@ -311,6 +331,7 @@ def generate(model, prompt, tokenizer, args):
     s = tokenizer.decode([t.item() for t in tokens])
     print(s, flush=True)
 
+
 if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
@@ -358,6 +379,15 @@ if __name__ == "__main__":
             "Use --train to learn and save the adapters.npz."
         )
     model.load_weights(args.adapter_file, strict=False)
+
+    # Merge the LoRA adapters into the linear layers
+    if args.merge_lora:
+        prepare_model_for_export(
+            model,
+            model_path=args.model,
+            tokenizer=tokenizer,
+            export_path=args.export_path,
+        )
 
     if args.test:
         print("Testing")

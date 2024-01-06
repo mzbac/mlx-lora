@@ -7,3 +7,4 @@ dist
 
 models
 adapters.npz
+merged_model
