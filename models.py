@@ -98,7 +98,11 @@ class LoRALinear(nn.Module):
         """
         if isinstance(self.linear, nn.QuantizedLinear):
             self.linear.weight = mx.dequantize(
-                self.linear.weight, self.linear.group_size, self.linear.bits
+                self.linear.weight,
+                self.linear.scales,
+                self.linear.biases,
+                self.linear.group_size,
+                self.linear.bits,
             )
         output_dims, input_dims = self.linear.weight.shape
         self.linear.weight += (self.lora_a @ self.lora_b).T * 2.0
@@ -302,6 +306,10 @@ def load(path_or_hf_repo: str):
 
     model = Model(model_args)
     if quantization is not None:
+        # quantization["linear_class_predicate"] = (
+        #     lambda m: isinstance(m, nn.Linear)
+        #     and m.weight.shape[0] != config["vocab_size"]
+        # ) # Don't quantize the lm_head layer only use for the quant model which quantize by convert.py script
         nn.QuantizedLinear.quantize_module(model, **quantization)
 
     model.load_weights(list(weights.items()))

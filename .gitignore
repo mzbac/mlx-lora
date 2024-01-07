@@ -8,3 +8,4 @@ dist
 models
 adapters.npz
 merged_model
+mlx_model

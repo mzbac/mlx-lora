@@ -42,8 +42,13 @@ def quantize(weights, config, args):
     model.load_weights(list(weights.items()))
 
     # Quantize the model:
-    nn.QuantizedLinear.quantize_module(model, args.q_group_size, args.q_bits)
-
+    nn.QuantizedLinear.quantize_module(
+        model,
+        args.q_group_size,
+        args.q_bits,
+        linear_class_predicate=lambda m: isinstance(m, nn.Linear)
+        and m.weight.shape[0] != config["vocab_size"], # Don't quantize the lm_head layer, need to update the model's load to avoid quantizing lm_head layer as well
+    )
     # Update the config:
     quantized_config["quantization"] = {
         "group_size": args.q_group_size,

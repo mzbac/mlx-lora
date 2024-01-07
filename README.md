@@ -57,3 +57,4 @@ columns: Player, No., Nationality, Position, Years in Toronto, School/Club Team
 Q: What is terrence ross' nationality
 A: "
 ```
+**Note:** If you merge qlora adapter weights, it may result in performance degradation when using the quant model from mlx-community. This is because the lm_head layer gets quantized and dequantized during the merge, which can cause some issues.
