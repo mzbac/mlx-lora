@@ -35,6 +35,7 @@ def merge_lora(model):
                 output_dims, input_dims = weight.shape
                 new_linear = nn.Linear(input_dims, output_dims, bias=False)
                 new_linear.weight = weight
+                mx.eval(new_linear.weight)
                 linear_replacements[name] = new_linear 
 
         if isinstance(module, LoRALinear):
