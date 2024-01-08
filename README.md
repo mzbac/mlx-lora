@@ -25,7 +25,7 @@ For instance, if you want to train the hf model directly, you would use:
 python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600
 ```
 
-On the other hand, if you wish to train the hf model with qlora, the command would be:
+On the other hand, if you wish to train the quant mlx model with qlora, the command would be:
 
 
 ```
@@ -45,7 +45,11 @@ The dataset for fine-tuning is located in the `data` folder. The file is named `
 ```
 {"text": "This is an example for the model."}
 ```
-Please note that you need to prepare your own Q&A dataset. The dataset should be a single text sentence without any beginning of sentence (bos) or end of sentence (eos) characters.
+Please note that you need to preprocess your own Q&A dataset to construct each Q&A pair into a single sentence. For example, if you have a question "What is the capital of France?" and its answer "The capital of France is Paris." you should concatenate these into a single sentence. A possible concatenated sentence could be: "Q:What is the capital of France?\nA:The capital of France is Paris," and in your data.json it should be like:
+```
+{"text": "Q:What is the capital of France?\nA:The capital of France is Paris."}
+```
+
 
 
 ## Merge lora back to original model
