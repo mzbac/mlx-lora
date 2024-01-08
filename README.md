@@ -8,7 +8,8 @@ pip install -r requirements.txt
 ```
 
 ## Training the Model
-Training the Model
+
+To train the model, you'll need to use the lora.py script with the appropriate command-line arguments. Here's an example of how to do this:
 
 ```
 python lora.py --model <path_to_model> \
@@ -16,18 +17,25 @@ python lora.py --model <path_to_model> \
                --iters 600
 ```
 
-Here, <path_to_your_model> should be replaced with the path to your model.
+In the above command, replace <path_to_your_model> with the path to the model you want to train.
 
-For instance, to train the hf model directly, use:
+For instance, if you want to train the hf model directly, you would use:
 
 ```
 python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600
 ```
 
-Or, to train the hf model with qlora, use:
+On the other hand, if you wish to train the hf model with qlora, the command would be:
+
 
 ```
 python lora.py --model mlx-community/deepseek-coder-6.7b-instruct-hf-4bit-mlx --train --iters 600
+```
+For fine-tuning with all linear layers, use the following command:
+
+
+```
+python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600 --all-layers
 ```
 
 ## Preparing Your Data
@@ -46,7 +54,7 @@ Merge the lora model back to the original model. It uses the `lora.py` script wi
 ## Merge lora back to original model
 
 ```
-python lora.py --model ./models/mistralai/Mistral-7B-v0.1 --adapter-file adapters.npz --merge-lora  
+python lora.py --model mistralai/Mistral-7B-v0.1 --adapter-file adapters.npz --merge-lora  
 ```
 
 To run inference only, use the following command:
@@ -57,4 +65,3 @@ columns: Player, No., Nationality, Position, Years in Toronto, School/Club Team
 Q: What is terrence ross' nationality
 A: "
 ```
-**Note:** If you merge qlora adapter weights, it may result in performance degradation when using the quant model from mlx-community. This is because the lm_head layer gets quantized and dequantized during the merge, which can cause some issues.

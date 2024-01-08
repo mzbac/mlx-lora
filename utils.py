@@ -10,8 +10,6 @@ from models import LoRALinear
 def apply_lora_to_all_layers(model):
     linear_replacements = {}
     for name, module in model.named_modules():
-        if name == "lm_head":
-            continue
         if isinstance(module, nn.Linear) or isinstance(module, nn.QuantizedLinear):
             replacement_module = LoRALinear.from_linear(module)
             linear_replacements[name] = replacement_module
@@ -22,22 +20,6 @@ def apply_lora_to_all_layers(model):
 def merge_lora(model):
     linear_replacements = {}
     for name, module in model.named_modules():
-        # dequantize the lm_head layer seems cause a lot of performance degradation, should avoid quantizing lm_head layer
-        if name == "lm_head":
-            if isinstance(module, nn.QuantizedLinear):
-                weight = mx.dequantize(
-                    module.weight,
-                    module.scales,
-                    module.biases,
-                    module.group_size,
-                    module.bits,
-                )
-                output_dims, input_dims = weight.shape
-                new_linear = nn.Linear(input_dims, output_dims, bias=False)
-                new_linear.weight = weight
-                mx.eval(new_linear.weight)
-                linear_replacements[name] = new_linear 
-
         if isinstance(module, LoRALinear):
             linear_replacements[name] = module.merge()
 
