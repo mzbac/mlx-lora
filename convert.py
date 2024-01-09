@@ -11,7 +11,7 @@ import mlx.nn as nn
 import transformers
 from huggingface_hub import snapshot_download
 from mlx.utils import tree_flatten
-from models import Model, ModelArgs
+from llama import Model, ModelArgs
 
 
 def fetch_from_hub(hf_path: str):

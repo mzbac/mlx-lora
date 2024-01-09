@@ -31,12 +31,14 @@ On the other hand, if you wish to train the quant mlx model with qlora, the comm
 ```
 python lora.py --model mlx-community/deepseek-coder-6.7b-instruct-hf-4bit-mlx --train --iters 600
 ```
-For fine-tuning with all linear layers, use the following command:
 
+For fine-tuning with all linear layers, use the following command:
 
 ```
 python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600 --all-layers
 ```
+
+**Note:** full linear layers fine-tuning on phi2 seems have some issue. not very sure why
 
 ## Preparing Your Data
 

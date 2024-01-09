@@ -11,9 +11,14 @@ import mlx.nn as nn
 import mlx.optimizers as optim
 import numpy as np
 from mlx.utils import tree_flatten
-import models
+from huggingface_hub import snapshot_download
+import llama
+import phi2
+
+from lora_linear import LoRALinear
 from utils import (
     apply_lora_to_all_layers,
+    get_model_path,
     make_shards,
     merge_lora,
     prepare_model_for_export,
@@ -209,7 +214,7 @@ def iterate_batches(dset, tokenizer, batch_size, train=False):
             # Encode batch
             batch = [tokenizer.encode(dset[indices[i + j]]) for j in range(batch_size)]
             lengths = [len(x) for x in batch]
-
+            
             # Check if any sequence is longer than 2048 tokens
             if max(lengths) > 2048:
                 print(
@@ -339,15 +344,29 @@ if __name__ == "__main__":
     np.random.seed(args.seed)
 
     print("Loading pretrained model")
-    model, tokenizer = models.load(args.model)
-    # Freeze all layers other than LORA linears
-    model.freeze()
-    if args.all_layers:
-        apply_lora_to_all_layers(model)
+    model_path = get_model_path(args.model)
+    
+    with open(model_path / "config.json", "r") as f:
+        config = json.loads(f.read())
+        
+    if config.get("model_type","").startswith("phi"):
+        model, tokenizer = phi2.load(args.model)
+        model.freeze()
+        if args.all_layers:
+            apply_lora_to_all_layers(model)
+        else:
+            for l in model.transformer.h[-args.lora_layers :]:
+                l.mixer.Wqkv = LoRALinear.from_linear(l.mixer.Wqkv)
+                l.mixer.out_proj = LoRALinear.from_linear(l.mixer.out_proj)
     else:
-        for l in model.model.layers[-args.lora_layers :]:
-            l.self_attn.q_proj = models.LoRALinear.from_linear(l.self_attn.q_proj)
-            l.self_attn.v_proj = models.LoRALinear.from_linear(l.self_attn.v_proj)
+        model, tokenizer = llama.load(args.model)
+        model.freeze()
+        if args.all_layers:
+            apply_lora_to_all_layers(model)
+        else:
+            for l in model.model.layers[-args.lora_layers :]:
+                l.self_attn.q_proj = LoRALinear.from_linear(l.self_attn.q_proj)
+                l.self_attn.v_proj = LoRALinear.from_linear(l.self_attn.v_proj)
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")
@@ -364,7 +383,7 @@ if __name__ == "__main__":
 
     if args.train:
         print("Training")
-        opt = optim.Adam(learning_rate=args.learning_rate)
+        opt = optim.AdamW(learning_rate=args.learning_rate)
 
         # Train model
         train(model, train_set, valid_set, opt, loss, tokenizer, args)
@@ -378,13 +397,14 @@ if __name__ == "__main__":
             f"Adapter file {args.adapter_file} missing. "
             "Use --train to learn and save the adapters.npz."
         )
+    
     model.load_weights(args.adapter_file, strict=False)
 
     # Merge the LoRA adapters into the linear layers
     if args.merge_lora:
         prepare_model_for_export(
             model,
-            model_path=args.model,
+            model_path=model_path,
             tokenizer=tokenizer,
             export_path=args.export_path,
         )
@@ -406,4 +426,5 @@ if __name__ == "__main__":
 
     if args.prompt is not None:
         print("Generating")
+        model.eval()
         generate(model, args.prompt, tokenizer, args)

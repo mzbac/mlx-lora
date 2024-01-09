@@ -1,43 +1,53 @@
 import argparse
+import json
 from pathlib import Path
+import time
 import mlx.core as mx
-import models
+import llama
+import phi2
+from utils import get_model_path
+import transformers
 
-def generate(model, prompt, tokenizer, args):
-    print(args.prompt, end="", flush=True)
-    prompt = mx.array(tokenizer.encode(args.prompt))
+def generate(
+    model,
+    tokenizer: transformers.AutoTokenizer,
+    prompt: str,
+    max_tokens: int,
+    temp: float = 0.0,
+):
+    prompt = tokenizer.encode(prompt)
 
-    def generate_step():
-        temp = args.temp
+    prompt = mx.array(prompt)
 
-        def sample(logits):
-            if temp == 0:
-                return mx.argmax(logits, axis=-1)
-            else:
-                return mx.random.categorical(logits * (1 / temp))
-
-        logits, cache = model(prompt[None])
-        y = sample(logits[:, -1, :])
-        yield y
-
-        while True:
-            logits, cache = model(y[:, None], cache)
-            y = sample(logits.squeeze(1))
-            yield y
-
+    tic = time.time()
     tokens = []
-    for token, _ in zip(generate_step(), range(args.num_tokens)):
-        tokens.append(token)
+    skip = 0
+    for token, n in zip(
+        model.generate(prompt, args.temp),
+        range(args.num_tokens),
+    ):
+        if token == tokenizer.eos_token_id:
+            break
 
-        if (len(tokens) % 10) == 0:
-            mx.eval(tokens)
-            s = tokenizer.decode([t.item() for t in tokens])
-            print(s, end="", flush=True)
-            tokens = []
+        if n == 0:
+            prompt_time = time.time() - tic
+            tic = time.time()
 
-    mx.eval(tokens)
-    s = tokenizer.decode([t.item() for t in tokens])
-    print(s, flush=True)
+        tokens.append(token.item())
+        # if (n + 1) % 10 == 0:
+        s = tokenizer.decode(tokens)
+        print(s[skip:], end="", flush=True)
+        skip = len(s)
+    print(tokenizer.decode(tokens)[skip:], flush=True)
+    gen_time = time.time() - tic
+    print("=" * 10)
+    if len(tokens) == 0:
+        print("No tokens generated for this prompt")
+        return
+    prompt_tps = prompt.size / prompt_time
+    gen_tps = (len(tokens) - 1) / gen_time
+    print(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
+    print(f"Generation: {gen_tps:.3f} tokens-per-sec")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="llm inference script")
@@ -70,7 +80,15 @@ if __name__ == "__main__":
 
     mx.random.seed(args.seed)
     print("Loading pretrained model")
-    model, tokenizer = models.load(args.model)
+    model_path = get_model_path(args.model)
+    with open(model_path / "config.json", "r") as f:
+        config = json.loads(f.read())
+        
+    if config["model_type"] == "phi-msft":
+        model, tokenizer = phi2.load(args.model)
+    else:
+        model, tokenizer = llama.load(args.model)
     if args.prompt is not None:
         print("Generating")
-        generate(model, args.prompt, tokenizer, args)
+        model.eval()
+        generate(model=model, prompt= args.prompt, tokenizer= tokenizer, max_tokens=args.num_tokens, temp=args.temp)

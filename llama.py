@@ -52,64 +52,6 @@ class ModelArgs:
         )
 
 
-class LoRALinear(nn.Module):
-    @staticmethod
-    def from_linear(linear: nn.Linear, rank: int = 8):
-        # TODO remove when input_dims and output_dims are attributes
-        # on linear and quantized linear
-        output_dims, input_dims = linear.weight.shape
-        if isinstance(linear, nn.QuantizedLinear):
-            input_dims *= 32 // linear.bits
-        lora_lin = LoRALinear(input_dims, output_dims, rank)
-        lora_lin.linear = linear
-        return lora_lin
-
-    def __init__(
-        self, input_dims: int, output_dims: int, lora_rank: int = 8, bias: bool = False
-    ):
-        super().__init__()
-
-        # Regular linear layer weights
-        self.linear = nn.Linear(input_dims, output_dims, bias=bias)
-
-        # Low rank lora weights
-        scale = 1 / math.sqrt(input_dims)
-        self.lora_a = mx.random.uniform(
-            low=-scale,
-            high=scale,
-            shape=(input_dims, lora_rank),
-        )
-        self.lora_b = mx.zeros(shape=(lora_rank, output_dims))
-
-    def __call__(self, x):
-        dtype = self.linear.weight.dtype
-        if isinstance(self.linear, nn.QuantizedLinear):
-            dtype = self.linear.scales.dtype
-        y = self.linear(x.astype(dtype))
-        z = (x @ self.lora_a) @ self.lora_b
-        return y + 2.0 * z
-
-    def merge(self):
-        """
-        Merge the base linear layer with lora weights from LoRA layers.
-
-        Returns:
-            nn.Linear: A new linear layer with modified weights.
-        """
-        if isinstance(self.linear, nn.QuantizedLinear):
-            self.linear.weight = mx.dequantize(
-                self.linear.weight,
-                self.linear.scales,
-                self.linear.biases,
-                self.linear.group_size,
-                self.linear.bits,
-            )
-        output_dims, input_dims = self.linear.weight.shape
-        self.linear.weight += (self.lora_a @ self.lora_b).T * 2.0
-        new_linear = nn.Linear(input_dims, output_dims, bias=False)
-        new_linear.weight = self.linear.weight
-        return new_linear
-
 
 class RMSNorm(nn.Module):
     def __init__(self, dims: int, eps: float = 1e-5):
@@ -278,6 +220,21 @@ class Model(nn.Module):
         out, cache = self.model(inputs, cache)
         return self.lm_head(out), cache
 
+    def generate(self,prompt: mx.array, temp: float = 0.0):
+        def sample(logits):
+            if temp == 0:
+                return mx.argmax(logits, axis=-1)
+            else:
+                return mx.random.categorical(logits * (1 / temp))
+
+        y = prompt
+        cache = None
+        while True:
+            logits, cache = self(y[None], cache=cache)
+            logits = logits[:, -1, :]
+            y = sample(logits)
+            yield y
+
 
 def load(path_or_hf_repo: str):
     # If the path exists, it will try to load model form it
@@ -317,17 +274,3 @@ def load(path_or_hf_repo: str):
     return model, tokenizer
 
 
-def generate(prompt: mx.array, model: Model, temp: float = 0.0):
-    def sample(logits):
-        if temp == 0:
-            return mx.argmax(logits, axis=-1)
-        else:
-            return mx.random.categorical(logits * (1 / temp))
-
-    y = prompt
-    cache = None
-    while True:
-        logits, cache = model(y[None], cache=cache)
-        logits = logits[:, -1, :]
-        y = sample(logits)
-        yield y

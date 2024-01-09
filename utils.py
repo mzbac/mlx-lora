@@ -3,8 +3,9 @@ from pathlib import Path
 import mlx.nn as nn
 import mlx.core as mx
 from mlx.utils import tree_unflatten, tree_flatten
+from huggingface_hub import snapshot_download
 
-from models import LoRALinear
+from lora_linear import LoRALinear
 
 
 def apply_lora_to_all_layers(model):
@@ -40,6 +41,17 @@ def make_shards(weights: dict, max_file_size_gibibyte: int = 15):
     shards.append(shard)
     return shards
 
+def get_model_path(model_identifier, allow_patterns=None):
+    model_path = Path(model_identifier)
+    if not model_path.exists():
+        model_path = Path(
+            snapshot_download(
+                repo_id=model_identifier,
+                allow_patterns=allow_patterns if allow_patterns else ["*.json", "*.safetensors", "tokenizer.model"],
+            )
+        )
+    return model_path
+
 
 def prepare_model_for_export(
     model,
@@ -49,7 +61,7 @@ def prepare_model_for_export(
 ):
     mlx_path = Path(export_path)
     mlx_path.mkdir(parents=True, exist_ok=True)
-
+    model_path =get_model_path(model_path)
     merge_lora(model)
 
     shards = make_shards(dict(tree_flatten(model.parameters())))
@@ -63,3 +75,4 @@ def prepare_model_for_export(
         config.pop("quantization", None)  # merged model is not quantized
     with open(mlx_path / "config.json", "w") as fid:
         json.dump(config, fid, indent=4)
+
