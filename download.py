@@ -16,27 +16,27 @@ def download_file(url, path):
             
     progress_bar.close()
 
-def download_model(model_name, destination_folder="models"):
-    base_url = f"https://huggingface.co/{model_name}/resolve/main"
+def download_model(dataset_name, destination_folder="data"):
+    base_url = f"https://huggingface.co/datasets/{dataset_name}/resolve/main"
     headers = {"User-Agent": "Hugging Face Python"}
 
-    response = requests.get(f"https://huggingface.co/api/models/{model_name}", headers=headers)
+    response = requests.get(f"https://huggingface.co/api/datasets/{dataset_name}", headers=headers)
     response.raise_for_status()
     
     files_to_download = [file["rfilename"] for file in response.json()["siblings"]]
 
-    allowed_extensions = [".json", ".safetensors", ".model"]
+    allowed_extensions = [".jsonl"]
 
-    os.makedirs(f"{destination_folder}/{model_name}", exist_ok=True)
+    os.makedirs(f"{destination_folder}/{dataset_name}", exist_ok=True)
 
     for file in files_to_download:
         if any(file.endswith(ext) for ext in allowed_extensions):
             print(f"Downloading {file}...")
-            download_file(f"{base_url}/{file}", f"{destination_folder}/{model_name}/{file}")
+            download_file(f"{base_url}/{file}", f"{destination_folder}/{dataset_name}/{file}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("model_name", type=str, help="Name of the model to download.")
+    parser.add_argument("dataset_name", type=str, help="Name of the dataset to download.")
     args = parser.parse_args()
 
-    download_model(args.model_name)
+    download_model(args.dataset_name)

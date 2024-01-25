@@ -1,16 +1,7 @@
-# Copyright © 2023 Apple Inc.
-
-import argparse
-import json
-import math
-import time
-from pathlib import Path
-
-import mlx.core as mx
-import mlx.nn as nn
-import mlx.optimizers as optim
-import numpy as np
+from mlx_lm import load
+from mlx_lm.lora import LoRALinear
 from mlx.utils import tree_flatten
+<<<<<<< Updated upstream
 import models
 from utils import (
     apply_lora_to_all_layers,
@@ -129,13 +120,16 @@ def build_parser():
     )
     parser.add_argument("--seed", type=int, default=0, help="The PRNG seed")
     return parser
+=======
+from mlx_lm.tuner.trainer import TrainingArgs, train
+import mlx.optimizers as optim
+
+import json
+from pathlib import Path
+>>>>>>> Stashed changes
 
 
 class Dataset:
-    """
-    Light-weight wrapper to hold lines from a jsonl file
-    """
-
     def __init__(self, data, key: str = "text"):
         self._data = data
         self._key = key
@@ -147,41 +141,34 @@ class Dataset:
         return len(self._data)
 
 
-def split_dataset(data, train_ratio, valid_ratio, test_ratio):
-    total = len(data)
-    train_end = int(total * train_ratio)
-    valid_end = train_end + int(total * valid_ratio)
-
-    train_data = data[:train_end]
-    valid_data = data[train_end:valid_end]
-    test_data = data[valid_end:]
-
-    return train_data, valid_data, test_data
-
-
-def load(args, train_ratio=0.7, valid_ratio=0.2, test_ratio=0.1):
-    path = Path(args.data)
+def load_dataset(path: str):
+    path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
     with open(path, "r") as fid:
         data = [json.loads(line) for line in fid]
 
-    import random
+    dataset = Dataset(data)
 
-    random.shuffle(data)
+    return dataset
 
-    train_data, valid_data, test_data = split_dataset(
-        data, train_ratio, valid_ratio, test_ratio
+
+def main():
+    train_dataset_path = "./data/timdettmers/openassistant-guanaco/openassistant_best_replies_train.jsonl"
+    val_dataset_path = (
+        "./data/timdettmers/openassistant-guanaco/openassistant_best_replies_eval.jsonl"
     )
 
-    train = Dataset(train_data)
-    valid = Dataset(valid_data)
-    test = Dataset(test_data)
+    model_path = "mlx-community/Mixtral-8x7B-v0.1-hf-4bit-mlx"
 
-    return train, valid, test
+    model, tokenizer = load(model_path)
 
+    train_dst, valid_dst = load_dataset(train_dataset_path), load_dataset(
+        val_dataset_path
+    )
 
+<<<<<<< Updated upstream
 def loss(model, inputs, targets, lengths):
     # Run model on inputs
     logits, _ = model(inputs)
@@ -348,20 +335,51 @@ if __name__ == "__main__":
         for l in model.model.layers[-args.lora_layers :]:
             l.self_attn.q_proj = models.LoRALinear.from_linear(l.self_attn.q_proj)
             l.self_attn.v_proj = models.LoRALinear.from_linear(l.self_attn.v_proj)
+=======
+    model.freeze()
+    for l in model.model.layers:
+        l.self_attn.q_proj = LoRALinear.from_linear(
+            l.self_attn.q_proj, r=16, lora_alpha=32, lora_dropout=0.1
+        )
+        l.self_attn.v_proj = LoRALinear.from_linear(
+            l.self_attn.v_proj, r=16, lora_alpha=32, lora_dropout=0.1
+        )
+        # l.self_attn.o_proj = LoRALinear.from_linear(l.self_attn.o_proj)
+        if hasattr(l, "block_sparse_moe"):
+            l.block_sparse_moe.gate = LoRALinear.from_linear(
+                l.block_sparse_moe.gate, r=16, lora_alpha=32, lora_dropout=0.1
+            )
+>>>>>>> Stashed changes
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")
     p = sum(v.size for _, v in tree_flatten(model.trainable_parameters())) / 10**6
     print(f"Trainable parameters {p:.3f}M")
+   
+    trainingArgs = TrainingArgs(
+        batch_size=2,
+        iters=9000,
+        val_batches=25,
+        steps_per_report=10,
+        steps_per_eval=200,
+        steps_per_save=200,
+        adapter_file="adapters.npz",
+        max_seq_length=512,
+    )
 
-    print("Loading datasets")
-    train_set, valid_set, test_set = load(args)
+    model.train()
+    opt = optim.AdamW(learning_rate=1e-5)
 
-    # Resume training the given adapters.
-    if args.resume_adapter_file is not None:
-        print(f"Loading pretrained adapters from {args.resume_adapter_file}")
-        model.load_weights(args.resume_adapter_file, strict=False)
+    train(
+        model=model,
+        tokenizer=tokenizer,
+        args=trainingArgs,
+        optimizer=opt,
+        train_dataset=train_dst,
+        val_dataset=valid_dst,
+    )
 
+<<<<<<< Updated upstream
     if args.train:
         print("Training")
         opt = optim.Adam(learning_rate=args.learning_rate)
@@ -407,3 +425,7 @@ if __name__ == "__main__":
     if args.prompt is not None:
         print("Generating")
         generate(model, args.prompt, tokenizer, args)
+=======
+
+main()
+>>>>>>> Stashed changes

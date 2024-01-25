@@ -9,14 +9,13 @@ pip install -r requirements.txt
 
 ## Training the Model
 
-To train the model, you'll need to use the lora.py script with the appropriate command-line arguments. Here's an example of how to do this:
+You can customize the lora.py script as per your requirements. To run the script, use:
 
 ```
-python lora.py --model <path_to_model> \
-               --train \
-               --iters 600
+python lora.py
 ```
 
+<<<<<<< Updated upstream
 In the above command, replace <path_to_your_model> with the path to the model you want to train.
 
 For instance, if you want to train the hf model directly, you would use:
@@ -38,9 +37,11 @@ For fine-tuning with all linear layers, use the following command:
 python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600 --all-layers
 ```
 
+=======
+>>>>>>> Stashed changes
 ## Preparing Your Data
 
-The dataset for fine-tuning is located in the `data` folder. The file is named `data.jsonl``. The data format should be as follows:
+The dataset for fine-tuning is located in the `data` folder. The data format should be as follows:
 
 ```
 {"text": "This is an example for the model."}
@@ -51,21 +52,17 @@ Please note that you need to preprocess your own Q&A dataset to construct each Q
 ```
 
 
-
 ## Merge lora back to original model
 
-Merge the lora model back to the original model. It uses the `lora.py` script with the following command-line arguments:
+Merge the lora model back to the original model. It uses the mlx-lm `fuse.py` script with the following command-line arguments:
 ## Merge lora back to original model
 
 ```
-python lora.py --model mistralai/Mistral-7B-v0.1 --adapter-file adapters.npz --merge-lora  
+python -m mlx_lm.fuse --model <path_to_model> --adapter-file <path_to_adapter>
 ```
 
 To run inference only, use the following command:
 
 ```
-python inference.py --model merged_model --prompt "table: 1-10015132-16
-columns: Player, No., Nationality, Position, Years in Toronto, School/Club Team
-Q: What is terrence ross' nationality
-A: "
+python -m mlx_lm.generate --model <path_to_model> --adapter-file <path_to_adapter>
 ```

@@ -1,4 +1,5 @@
-mlx>=0.0.7
+mlx>=0.0.10
+mlx-lm>=0.0.5
 torch
 numpy
 transformers
