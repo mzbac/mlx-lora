@@ -15,30 +15,6 @@ You can customize the lora.py script as per your requirements. To run the script
 python lora.py
 ```
 
-<<<<<<< Updated upstream
-In the above command, replace <path_to_your_model> with the path to the model you want to train.
-
-For instance, if you want to train the hf model directly, you would use:
-
-```
-python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600
-```
-
-On the other hand, if you wish to train the quant mlx model with qlora, the command would be:
-
-
-```
-python lora.py --model mlx-community/deepseek-coder-6.7b-instruct-hf-4bit-mlx --train --iters 600
-```
-For fine-tuning with all linear layers, use the following command:
-
-
-```
-python lora.py --model mistralai/Mistral-7B-v0.1 --train --iters 600 --all-layers
-```
-
-=======
->>>>>>> Stashed changes
 ## Preparing Your Data
 
 The dataset for fine-tuning is located in the `data` folder. The data format should be as follows:
