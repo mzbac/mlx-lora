@@ -1,5 +1,5 @@
 from mlx_lm import load
-from mlx_lm.lora import LoRALinear
+from mlx_lm.tuner.lora import LoRALinear
 from mlx.utils import tree_flatten
 from mlx_lm.tuner.trainer import TrainingArgs, train
 import mlx.optimizers as optim
