@@ -1,5 +1,7 @@
+import random
+from typing import Tuple
 from mlx_lm import load
-from mlx_lm.lora import LoRALinear
+from mlx_lm.tuner.lora import LoRALinear
 from mlx.utils import tree_flatten
 from mlx_lm.tuner.trainer import TrainingArgs, train
 import mlx.optimizers as optim
@@ -8,58 +10,84 @@ import json
 from pathlib import Path
 
 
+MAX_SEQ_LENGTH = 2048
+ITERS = 10000
 class Dataset:
-    def __init__(self, data, key: str = "text"):
+    def __init__(self, data):
         self._data = data
-        self._key = key
 
     def __getitem__(self, idx: int):
-        return self._data[idx][self._key]
+        return self._data[idx]
 
     def __len__(self):
         return len(self._data)
 
 
-def load_dataset(path: str):
+def load_dataset(
+    path: str, tokenizer, train_split: float = 0.8
+) -> Tuple[Dataset, Dataset]:
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    with open(path, "r") as fid:
-        data = [json.loads(line) for line in fid]
+    data = []
+    with open(path, 'r', encoding='utf-8') as file:
+        for line in file:
+            json_obj = json.loads(line.strip())
+            data.append(json_obj)
 
-    dataset = Dataset(data)
+    random.shuffle(data)
 
-    return dataset
+    filtered_data = []
+    for item in data:
+        combined_text = tokenizer.apply_chat_template(item['messages'], tokenize=False)
+        token_count = len(tokenizer.tokenize(combined_text))
+        if token_count <= MAX_SEQ_LENGTH:
+            filtered_data.append(combined_text)
+            
+    print(f"total data: {len(data)}, filtered data: {len(filtered_data)}")
+    combined_data = filtered_data[:ITERS]
+
+    random.shuffle(combined_data)
+
+    split_idx = int(len(combined_data) * train_split)
+    train_data = combined_data[:split_idx]
+    val_data = combined_data[split_idx:]
+
+    train_dataset = Dataset(train_data)
+    val_dataset = Dataset(val_data)
+
+    return train_dataset, val_dataset
 
 
 def main():
-    train_dataset_path = "./data/timdettmers/openassistant-guanaco/openassistant_best_replies_train.jsonl"
-    val_dataset_path = (
-        "./data/timdettmers/openassistant-guanaco/openassistant_best_replies_eval.jsonl"
+    train_dataset_path = (
+        "./data/m-a-p/Code-Feedback/Code-Feedback.jsonl"
     )
 
-    model_path = "mlx-community/Mixtral-8x7B-v0.1-hf-4bit-mlx"
+    model_path = "mlx-community/Mixtral-8x7B-Instruct-v0.1-hf-4bit-mlx"
 
     model, tokenizer = load(model_path)
 
-    train_dst, valid_dst = load_dataset(train_dataset_path), load_dataset(
-        val_dataset_path
-    )
+    train_dst, valid_dst = load_dataset(train_dataset_path, tokenizer)
 
     model.freeze()
     for l in model.model.layers:
         l.self_attn.q_proj = LoRALinear.from_linear(
-            l.self_attn.q_proj, r=16, lora_alpha=32, lora_dropout=0.1
+            l.self_attn.q_proj, r=128, lora_alpha=256
         )
-        l.self_attn.v_proj = LoRALinear.from_linear(
-            l.self_attn.v_proj, r=16, lora_alpha=32, lora_dropout=0.1
+        l.self_attn.k_proj = LoRALinear.from_linear(
+            l.self_attn.k_proj, r=128, lora_alpha=256
         )
-        # l.self_attn.o_proj = LoRALinear.from_linear(l.self_attn.o_proj)
-        if hasattr(l, "block_sparse_moe"):
-            l.block_sparse_moe.gate = LoRALinear.from_linear(
-                l.block_sparse_moe.gate, r=16, lora_alpha=32, lora_dropout=0.1
-            )
+
+        l.block_sparse_moe.gate = LoRALinear.from_linear(
+            l.block_sparse_moe.gate, r=128, lora_alpha=256
+        )
+
+        for e in l.block_sparse_moe.experts:
+            e.gate_proj = LoRALinear.from_linear(e.w1, r=128, lora_alpha=256)
+            e.down_proj = LoRALinear.from_linear(e.w2, r=128, lora_alpha=256)
+            e.up_proj = LoRALinear.from_linear(e.w3, r=128, lora_alpha=256)
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")
@@ -67,18 +95,19 @@ def main():
     print(f"Trainable parameters {p:.3f}M")
    
     trainingArgs = TrainingArgs(
-        batch_size=2,
-        iters=9000,
+        batch_size=1,
+        iters=ITERS,
         val_batches=25,
         steps_per_report=10,
         steps_per_eval=200,
         steps_per_save=200,
         adapter_file="adapters.npz",
-        max_seq_length=512,
+        max_seq_length=MAX_SEQ_LENGTH,
     )
 
     model.train()
-    opt = optim.AdamW(learning_rate=1e-5)
+    lr_schedule = optim.cosine_decay(1e-5, ITERS)
+    opt = optim.AdamW(learning_rate=lr_schedule)
 
     train(
         model=model,
