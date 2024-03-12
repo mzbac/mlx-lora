@@ -85,9 +85,9 @@ def main():
         )
 
         for e in l.block_sparse_moe.experts:
-            e.gate_proj = LoRALinear.from_linear(e.w1, r=128, lora_alpha=256)
-            e.down_proj = LoRALinear.from_linear(e.w2, r=128, lora_alpha=256)
-            e.up_proj = LoRALinear.from_linear(e.w3, r=128, lora_alpha=256)
+            e.w1 = LoRALinear.from_linear(e.w1, r=128, lora_alpha=256)
+            e.w2 = LoRALinear.from_linear(e.w2, r=128, lora_alpha=256)
+            e.w3 = LoRALinear.from_linear(e.w3, r=128, lora_alpha=256)
 
     p = sum(v.size for _, v in tree_flatten(model.parameters())) / 10**6
     print(f"Total parameters {p:.3f}M")
